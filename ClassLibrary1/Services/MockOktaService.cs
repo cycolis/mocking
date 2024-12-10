@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -22,117 +21,128 @@ public class MockOktaService : IMockOktaService
     {
         Console.WriteLine($"Base URL: {_baseUrl}");
 
-        // Step 1: Send token request to AuthenticationController
-        var tokenRequest = new TokenRequestPayload
-        {
-            Username = username,
-            Password = password,
-            ClientId = "o0123456789",
-            ClientSecret = "123455asbdfdafs1234"
-        };
-
-        var tokenFormData = new Dictionary<string, string>
-        {
-            { "grant_type", tokenRequest.GrantType },
-            { "acr_values", tokenRequest.AcrValues },
-            { "username", tokenRequest.Username },
-            { "password", tokenRequest.Password },
-            { "scope", tokenRequest.Scope },
-            { "client_id", tokenRequest.ClientId },
-            { "client_secret", tokenRequest.ClientSecret }
-        };
-
-        var tokenResponse = await _httpClient.PostAsync(
+        // Step 1: Send token request
+        var tokenResponse = await PostFormDataAsync(
             $"{_baseUrl}/oauth2/v1/authentication/token",
-            new FormUrlEncodedContent(tokenFormData));
+            new TokenRequestPayload
+            {
+                Username = username,
+                Password = password,
+                ClientId = "o0123456789",
+                ClientSecret = "123455asbdfdafs1234"
+            }
+        );
 
-        var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
-        var tokenData = JsonSerializer.Deserialize<JsonElement>(tokenContent);
+        var accessToken = ExtractProperty(tokenResponse, "access_token");
 
-        // Extract the access_token
-        string accessToken = tokenData.GetProperty("access_token").GetString();
-
-        // Step 2: Send OOB request to MfaController
-        var oobRequest = new OobRequestPayload
-        {
-            LoginHint = username,
-            ClientId = tokenRequest.ClientId,
-            ClientSecret = tokenRequest.ClientSecret
-        };
-
-        var oobFormData = new Dictionary<string, string>
-        {
-            { "challenge_hint", oobRequest.ChallengeHint },
-            { "login_hint", oobRequest.LoginHint },
-            { "channel_hint", oobRequest.ChannelHint },
-            { "client_id", oobRequest.ClientId },
-            { "client_secret", oobRequest.ClientSecret }
-        };
-
-        var oobResponse = await _httpClient.PostAsync(
+        // Step 2: Send OOB request
+        var oobResponse = await PostFormDataAsync(
             $"{_baseUrl}/oauth2/v1/mfa/primary-authenticate",
-            new FormUrlEncodedContent(oobFormData));
+            new OobRequestPayload
+            {
+                LoginHint = username,
+                ClientId = "o0123456789",
+                ClientSecret = "123455asbdfdafs1234"
+            }
+        );
 
-        var oobContent = await oobResponse.Content.ReadAsStringAsync();
-        var oobData = JsonSerializer.Deserialize<JsonElement>(oobContent);
+        var oobCode = ExtractProperty(oobResponse, "oob_code");
 
-        // Extract oob_code
-        string oobCode = oobData.GetProperty("oob_code").GetString();
+        // Step 3: Poll for authorization
+        return await PollForAuthorization(oobCode);
+    }
 
-        // Step 3: Poll for authorization to MfaController
-        while (true)
+    private async Task<JsonElement> PostFormDataAsync(string url, object payload)
+    {
+        var formData = payload.GetType()
+                              .GetProperties()
+                              .ToDictionary(
+                                  prop => prop.Name,
+                                  prop => prop.GetValue(payload)?.ToString() ?? string.Empty
+                              );
+
+        var formContent = new FormUrlEncodedContent(formData);
+
+        var response = await _httpClient.PostAsync(url, formContent);
+        var content = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
         {
-            await Task.Delay(2000); // Wait for 2 seconds
+            Console.WriteLine($"Request to {url} failed with status code {response.StatusCode}.");
+            Console.WriteLine($"Error response: {content}");
+            throw new Exception(content);
+        }
+
+        Console.WriteLine($"Request to {url} succeeded.");
+        return JsonSerializer.Deserialize<JsonElement>(content);
+    }
+
+
+    private Dictionary<string, string> ConvertToFormData(object payload)
+    {
+        var formData = new Dictionary<string, string>();
+        foreach (var property in payload.GetType().GetProperties())
+        {
+            var value = property.GetValue(payload)?.ToString();
+            if (value != null)
+                formData[property.Name] = value;
+        }
+        return formData;
+    }
+
+    private string ExtractProperty(JsonElement response, string propertyName)
+    {
+        if (!response.TryGetProperty(propertyName, out var property))
+        {
+            throw new Exception($"Response does not contain '{propertyName}'.");
+        }
+        return property.GetString();
+    }
+
+    public async Task<string> PollForAuthorization(string oobCode)
+    {
+        int maxAttempts = 10;
+        int attempt = 0;
+
+        while (attempt < maxAttempts)
+        {
+            attempt++;
+            Console.WriteLine($"Polling Attempt: {attempt}");
 
             var pollRequest = new PollRequestPayload
             {
                 OobCode = oobCode,
-                ClientId = tokenRequest.ClientId,
-                ClientSecret = tokenRequest.ClientSecret
+                GrantType = "urn:okta:params:oauth:grant-type:oob",
+                AcrValues = "urn:okta:app:mfa:attestation",
+                Scope = "openid",
+                ClientId = "o0123456789",
+                ClientSecret = "123455asbdfdafs1234"
             };
 
-            var pollFormData = new Dictionary<string, string>
+            try
             {
-                { "oob_code", pollRequest.OobCode },
-                { "grant_type", pollRequest.GrantType },
-                { "acr_values", pollRequest.AcrValues },
-                { "scope", pollRequest.Scope },
-                { "client_id", pollRequest.ClientId },
-                { "client_secret", pollRequest.ClientSecret }
-            };
+                // Send polling request
+                var pollResponse = await PostFormDataAsync($"{_baseUrl}/oauth2/v1/mfa/token", pollRequest);
 
-            var pollResponse = await _httpClient.PostAsync(
-                $"{_baseUrl}/oauth2/v1/mfa/token",
-                new FormUrlEncodedContent(pollFormData));
-
-            var pollContent = await pollResponse.Content.ReadAsStringAsync();
-            Console.WriteLine($"Polling Response: {pollContent}");
-
-            if (pollResponse.IsSuccessStatusCode)
-            {
-                Console.WriteLine("Polling succeeded.");
-                return pollContent;
+                // If polling succeeds, return the response
+                Console.WriteLine($"Polling Succeeded: {pollResponse}");
+                return pollResponse.ToString();
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine("Polling failed with status code:");
-                Console.WriteLine($"Status Code: {pollResponse.StatusCode}, Reason: {pollResponse.ReasonPhrase}");
-            }
+                Console.WriteLine($"Polling failed: {ex.Message}");
 
-            var errorData = JsonSerializer.Deserialize<JsonElement>(pollContent);
-            if (errorData.TryGetProperty("error", out var errorProperty))
-            {
-                string error = errorProperty.GetString();
-                Console.WriteLine($"Error received: {error}");
-                if (error != "authorization_pending")
+                if (ex.Message.Contains("authorization_pending"))
                 {
-                    throw new Exception($"Polling failed with error: {error}");
+                    // Wait before retrying
+                    await Task.Delay(2000);
+                    continue; // Continue polling
                 }
-            }
-            else
-            {
-                throw new Exception("Unexpected response format. 'Error' key not found in response.");
+
+                throw;
             }
         }
+
+        throw new Exception("Polling failed: Maximum attempts reached.");
     }
 }

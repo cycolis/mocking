@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  mockoktaapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:80" # Map local port 5000 to container port 80
+
+  wiremock:
+    image: rodolpheche/wiremock
+    ports:
+      - "9090:8080" # Map local port 9090 to WireMock's default port 8080
+    volumes:
+      - ./wiremock-mappings:/home/wiremock/mappings
+      - ./wiremock-files:/home/wiremock/__files
