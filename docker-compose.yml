@@ -1,0 +1,28 @@
+services:
+  okta-auth-server-api:
+    build:
+      context: .
+      dockerfile: src/Okta.AuthServerApi/Dockerfile
+    ports:
+      - "5114:80" # Map local port 5114
+    environment:
+      - ASPNETCORE_HTTP_PORTS=80
+      - ASPNETCORE_URLS=http://+:80
+  okta-mobile:
+    build:
+      context: .
+      dockerfile: src/Okta.Mobile/Dockerfile
+    ports:
+      - "5073:80" # Map local port 5073
+    environment:
+      - ASPNETCORE_HTTP_PORTS=80
+      - ASPNETCORE_URLS=http://+:80
+  okta-auth-server-wiremock:
+    build:
+      context: .
+      dockerfile: ext/Okta.AuthServerApi.Mock/Dockerfile
+    ports:
+      - "9090:9090" # Map local port 9090 to WireMock server running in the container besides the host which is gonna be on port 80
+    environment:
+      - ASPNETCORE_HTTP_PORTS=80
+      - ASPNETCORE_URLS=http://+:80

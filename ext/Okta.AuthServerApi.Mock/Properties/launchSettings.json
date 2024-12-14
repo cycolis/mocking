@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Okta.AuthServerApi.Mock": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
