@@ -26,8 +26,10 @@ public class OktaService : IOktaService
             new TokenRequestPayload
             {
                 GrantType = "password",
+                AcrValues = "urn:okta:app:mfa:attestation",
                 Username = username,
                 Password = password,
+                Scope = "openid",
                 ClientId = "o0123456789",
                 ClientSecret = "123455asbdfdafs1234"
             }
@@ -38,6 +40,8 @@ public class OktaService : IOktaService
         // Step 2: Send OOB request
         OobRequestPayload oobRequest = new()
         {
+            ChallengeHint = "urn:okta:params:oauth:grant-type:oob",
+            ChannelHint = "push",
             LoginHint = username,
             ClientId = "o0123456789",
             ClientSecret = "123455asbdfdafs1234"
@@ -105,6 +109,8 @@ public class OktaService : IOktaService
 
             try
             {
+                Task.Delay(1000).Wait();
+
                 // Send polling request
                 var pollResponse = await PostToken("/oauth2/v1/token", pollRequest);
 

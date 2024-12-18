@@ -16,6 +16,12 @@ namespace Okta.AuthServerApi.Mock.Services;
 internal class MockServerService : IMockServerService
 {
     private const string VALIDATION_SCENARIO = "ValidationFlow";
+    private const string STATE_STARTED = "Started";
+    private const string STATE_AWAITING_VALIDATION = "WaitingForValidation";
+    private const string STATE_VALIDATED = "Validated";
+    private const string STATE_INVALIDATED = "Invalidated";
+    private const string STATE_AUTHENTICATED = "Authenticated";
+
     private readonly HttpClient _httpClient;
     private readonly WireMockServer _server;
 
@@ -27,6 +33,8 @@ internal class MockServerService : IMockServerService
 
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.BaseAddress = new Uri(settings.BaseUrl);
+
+        Console.WriteLine($"BaseUrl: {settings.BaseUrl}");
 
         _server = WireMockServer.Start(new WireMockServerSettings
         {
@@ -55,6 +63,103 @@ internal class MockServerService : IMockServerService
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
                 .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WillSetStateTo(STATE_STARTED)
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBodyAsJson(new
+                {
+                    access_token = "1eyJhb[...]56Rg",
+                    expires_in = 3600,
+                    id_token = "eyJhb[...]yosFQ",
+                    scope = "openid",
+                    token_type = "Bearer"
+                }));
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WhenStateIs(STATE_STARTED)
+            .WillSetStateTo(STATE_STARTED)
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBodyAsJson(new
+                {
+                    access_token = "1eyJhb[...]56Rg",
+                    expires_in = 3600,
+                    id_token = "eyJhb[...]yosFQ",
+                    scope = "openid",
+                    token_type = "Bearer"
+                }));
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WhenStateIs(STATE_AWAITING_VALIDATION)
+            .WillSetStateTo(STATE_STARTED)
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBodyAsJson(new
+                {
+                    access_token = "1eyJhb[...]56Rg",
+                    expires_in = 3600,
+                    id_token = "eyJhb[...]yosFQ",
+                    scope = "openid",
+                    token_type = "Bearer"
+                }));
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WhenStateIs(STATE_VALIDATED)
+            .WillSetStateTo(STATE_STARTED)
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBodyAsJson(new
+                {
+                    access_token = "1eyJhb[...]56Rg",
+                    expires_in = 3600,
+                    id_token = "eyJhb[...]yosFQ",
+                    scope = "openid",
+                    token_type = "Bearer"
+                }));
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WhenStateIs(STATE_INVALIDATED)
+            .WillSetStateTo(STATE_STARTED)
+            .RespondWith(Response.Create()
+                .WithStatusCode(200)
+                .WithBodyAsJson(new
+                {
+                    access_token = "1eyJhb[...]56Rg",
+                    expires_in = 3600,
+                    id_token = "eyJhb[...]yosFQ",
+                    scope = "openid",
+                    token_type = "Bearer"
+                }));
+
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+            .InScenario(VALIDATION_SCENARIO)
+            .WhenStateIs(STATE_AUTHENTICATED)
+            .WillSetStateTo(STATE_STARTED)
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithBodyAsJson(new
@@ -68,14 +173,14 @@ internal class MockServerService : IMockServerService
     }
 
     private void SetupOobEndpoint()
-    { 
+    {
         _server
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/primary-authenticate")
                 .UsingPost())
             .InScenario(VALIDATION_SCENARIO)
-            .WhenStateIs("Started")
-            .WillSetStateTo("waiting_for_validation")
+            .WhenStateIs(STATE_STARTED)
+            .WillSetStateTo(STATE_AWAITING_VALIDATION)
             .RespondWith(Response.Create()
                 .WithCallback(request => GetResponse()));
     }
@@ -123,8 +228,10 @@ internal class MockServerService : IMockServerService
 
         var task = Task.Run(async () =>
         {
+            Console.WriteLine($"Send push notification to {_httpClient.BaseAddress}");
+
             await _httpClient.PostAsJsonAsync(
-                "//mock-client", webhookPayload);
+                "/mock-client", webhookPayload);
         });
         task.Wait();
     }
@@ -133,11 +240,11 @@ internal class MockServerService : IMockServerService
     {
         _server
             .Given(Request.Create()
-                .WithPath("/oauth2/v1/mfa/validate")
+                .WithPath("/oauth2/v1/validate")
                 .UsingPost())
             .InScenario(VALIDATION_SCENARIO)
-            .WhenStateIs("waiting_for_validation")
-            .WillSetStateTo("validated")
+            .WhenStateIs(STATE_AWAITING_VALIDATION)
+            .WillSetStateTo(STATE_VALIDATED)
             .RespondWith(Response.Create()
                 .WithStatusCode(200));
     }
@@ -148,9 +255,10 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"")))
+                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"") || b.Contains("\"grant_type\": \"urn:okta:params:oauth:grant-type:oob\"")))
             .InScenario(VALIDATION_SCENARIO)
-            .WhenStateIs("waiting_for_validation")
+            .WhenStateIs(STATE_AWAITING_VALIDATION)
+            .WillSetStateTo(STATE_AWAITING_VALIDATION)
             .RespondWith(Response.Create()
                 .WithStatusCode(400)
                 .WithBodyAsJson(new
@@ -166,9 +274,9 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"")))
+                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"") || b.Contains("\"grant_type\": \"urn:okta:params:oauth:grant-type:oob\"")))
             .InScenario(VALIDATION_SCENARIO)
-            .WhenStateIs("validated")
+            .WhenStateIs(STATE_VALIDATED)
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithBodyAsJson(new
@@ -186,9 +294,9 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"")))
+                .WithBody(b => b.Contains("\"grant_type\":\"urn:okta:params:oauth:grant-type:oob\"") || b.Contains("\"grant_type\": \"urn:okta:params:oauth:grant-type:oob\"")))
             .InScenario(VALIDATION_SCENARIO)
-            .WhenStateIs("invalidated")
+            .WhenStateIs(STATE_INVALIDATED)
             .RespondWith(Response.Create()
                 .WithStatusCode(400)
                 .WithBodyAsJson(new
