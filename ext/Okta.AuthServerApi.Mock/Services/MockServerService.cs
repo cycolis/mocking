@@ -62,7 +62,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WillSetStateTo(STATE_STARTED)
             .RespondWith(Response.Create()
@@ -80,7 +80,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WhenStateIs(STATE_STARTED)
             .WillSetStateTo(STATE_STARTED)
@@ -99,7 +99,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WhenStateIs(STATE_AWAITING_VALIDATION)
             .WillSetStateTo(STATE_STARTED)
@@ -118,7 +118,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WhenStateIs(STATE_VALIDATED)
             .WillSetStateTo(STATE_STARTED)
@@ -137,7 +137,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WhenStateIs(STATE_INVALIDATED)
             .WillSetStateTo(STATE_STARTED)
@@ -156,7 +156,7 @@ internal class MockServerService : IMockServerService
             .Given(Request.Create()
                 .WithPath("/oauth2/v1/token")
                 .UsingPost()
-                .WithBody(b => b.Contains("\"grant_type\":\"password\"") || b.Contains("\"grant_type\": \"password\"")))
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"password123\"") && b.Contains("\"grant_type\":\"password\"")))
             .InScenario(VALIDATION_SCENARIO)
             .WhenStateIs(STATE_AUTHENTICATED)
             .WillSetStateTo(STATE_STARTED)
@@ -169,6 +169,20 @@ internal class MockServerService : IMockServerService
                     id_token = "eyJhb[...]yosFQ",
                     scope = "openid",
                     token_type = "Bearer"
+                }));
+
+        // Return 401 Unauthorized for incorrect password
+        _server
+            .Given(Request.Create()
+                .WithPath("/oauth2/v1/token")
+                .UsingPost()
+                .WithBody(b => b.Contains("\"username\":\"testuser1@example.com\"") && b.Contains("\"password\":\"wrong\"") && b.Contains("\"grant_type\":\"password\"")))
+            .RespondWith(Response.Create()
+                .WithStatusCode(401)
+                .WithBodyAsJson(new
+                {
+                    error = "invalid_grant",
+                    error_description = "Invalid username or password"
                 }));
     }
 

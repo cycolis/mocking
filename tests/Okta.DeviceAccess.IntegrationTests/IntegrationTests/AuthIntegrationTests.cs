@@ -28,12 +28,32 @@ public class AuthIntegrationTests
     }
 
     [Fact]
-    public async Task AuthenticateAsync_ReturnsExpectedResponse()
+    public async Task AuthenticateAsync_ReturnsSuccess_ValidCredentials()
     {
         var service = _serviceProvider.GetRequiredService<IOktaService>();
 
         var result = await service.AuthenticateAsync("testuser1@example.com", "password123");
 
-        Assert.Contains("access_token", result);
+        Assert.Contains("id_token", result);
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_ReturnsError_InvalidCredentials()
+    {
+        var service = _serviceProvider.GetRequiredService<IOktaService>();
+
+        var result = await service.AuthenticateAsync("testuser1@example.com", "wrong");
+
+        Assert.Contains("401", result);
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_ReturnsError_MobileClientOff()
+    {
+        var service = _serviceProvider.GetRequiredService<IOktaService>();
+
+        var result = await service.AuthenticateAsync("testuser1@example.com", "password123");
+
+        Assert.Contains("primary-authenticate", result);
     }
 }
