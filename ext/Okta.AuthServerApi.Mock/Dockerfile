@@ -20,4 +20,5 @@ RUN dotnet publish "./Okta.AuthServerApi.Mock.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY ["ext/Okta.AuthServerApi.Mock/appsettings.Docker.json", "./"]
 ENTRYPOINT ["dotnet", "Okta.AuthServerApi.Mock.dll"]
